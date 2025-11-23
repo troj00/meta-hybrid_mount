@@ -12,17 +12,10 @@ pub const CONFIG_FILE_DEFAULT: &str = "/data/adb/magic_mount/config.toml";
 pub struct Config {
     #[serde(default = "default_moduledir")]
     pub moduledir: PathBuf,
-
-    #[serde(default)]
     pub tempdir: Option<PathBuf>,
-
     #[serde(default = "default_mountsource")]
     pub mountsource: String,
-
-    #[serde(default)]
     pub verbose: bool,
-
-    #[serde(default)]
     pub partitions: Vec<String>,
 }
 
