@@ -20,12 +20,22 @@ export const API = {
 
   saveConfig: async (config) => {
     const jsonStr = JSON.stringify(config);
-    const encoder = new TextEncoder();
-    const bytes = encoder.encode(jsonStr);
+    
+    let bytes;
+    if (typeof TextEncoder !== 'undefined') {
+      const encoder = new TextEncoder();
+      bytes = encoder.encode(jsonStr);
+    } else {
+      bytes = new Uint8Array(jsonStr.length);
+      for (let i = 0; i < jsonStr.length; i++) {
+        bytes[i] = jsonStr.charCodeAt(i) & 0xFF;
+      }
+    }
     
     let hexPayload = '';
-    for (const byte of bytes) {
-      hexPayload += byte.toString(16).padStart(2, '0');
+    for (let i = 0; i < bytes.length; i++) {
+      const hex = bytes[i].toString(16);
+      hexPayload += (hex.length === 1 ? '0' + hex : hex);
     }
 
     const cmd = `${PATHS.BINARY} save-config --payload ${hexPayload}`;

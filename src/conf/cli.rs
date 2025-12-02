@@ -28,8 +28,12 @@ pub enum Commands {
         output: PathBuf,
     },
     ShowConfig,
-    /// Output storage usage in JSON format
+    
+    #[command(name = "save-config")]
+    SaveConfig {
+        #[arg(long)]
+        payload: String,
+    },
     Storage,
-    /// List modules in JSON format
     Modules,
 }
