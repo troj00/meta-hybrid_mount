@@ -89,26 +89,54 @@ fn build(release: bool, arch: Arch) -> Result<()> {
         }
     }
 
-    println!("Building for ABI: {} (API {})", arch.android_abi(), arch.api_level());
+    let ndk_home = env::var("ANDROID_NDK_HOME").context("ANDROID_NDK_HOME not set")?;
+    let host_os = std::env::consts::OS;
+    let host_tag = match host_os {
+        "linux" => "linux-x86_64",
+        "macos" => "darwin-x86_64",
+        "windows" => "windows-x86_64",
+        _ => panic!("Unsupported OS: {}", host_os),
+    };
+
+    let toolchain_bin = PathBuf::from(ndk_home)
+        .join("toolchains/llvm/prebuilt")
+        .join(host_tag)
+        .join("bin");
+
+    let api = arch.api_level();
+    let cc_name = match arch {
+        Arch::Arm64 => format!("aarch64-linux-android{}-clang", api),
+        Arch::Arm => format!("armv7a-linux-androideabi{}-clang", api),
+        Arch::X86_64 => format!("x86_64-linux-android{}-clang", api),
+        Arch::Riscv64 => format!("riscv64-linux-android{}-clang", api),
+    };
+
+    let cc_path = toolchain_bin.join(&cc_name);
+    let ar_path = toolchain_bin.join("llvm-ar");
+
+    println!("Building for ABI: {} (API {})", arch.android_abi(), api);
+    println!("Compiler: {}", cc_path.display());
 
     let mut cmd = Command::new(&cargo);
-    
-    cmd.arg("ndk")
-       .arg("-t").arg(arch.target())
-       .arg("-p").arg(arch.api_level());
-
-    cmd.arg("build");
+    cmd.arg("build")
+       .arg("--target").arg(arch.target());
 
     if matches!(arch, Arch::Riscv64) {
         cmd.arg("-Z").arg("build-std");
-        cmd.arg("--target").arg(arch.target());
     }
 
     if release {
         cmd.arg("--release");
     }
 
-    let status = cmd.status().context("Failed to run cargo ndk build")?;
+    let env_target = arch.target().replace('-', "_");
+    cmd.env(format!("CC_{}", env_target), &cc_path);
+    cmd.env(format!("AR_{}", env_target), &ar_path);
+    
+    cmd.env("CC", &cc_path);
+    cmd.env("AR", &ar_path);
+
+    let status = cmd.status().context("Failed to run cargo build")?;
     if !status.success() {
         anyhow::bail!("Build failed");
     }
