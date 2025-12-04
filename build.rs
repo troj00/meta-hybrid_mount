@@ -81,7 +81,7 @@ fn gen_module_prop(data: &CargoConfig) -> Result<()> {
     for a in authors {
         conut += 1;
         if conut > 1 {
-            author += &format!("& {a}");
+            author += &format!("& {a} ");
         } else {
             author += &format!("{a} ");
         }
