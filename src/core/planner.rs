@@ -6,6 +6,7 @@ use crate::{conf::config, defs, core::inventory::Module};
 
 #[derive(Debug)]
 pub struct OverlayOperation {
+    pub partition_name: String,
     pub target: String,
     pub lowerdirs: Vec<PathBuf>,
 }
@@ -32,7 +33,7 @@ impl MountPlan {
                 let is_last_op = i == self.overlay_ops.len() - 1 && self.magic_module_paths.is_empty();
                 let branch = if is_last_op { "╰──" } else { "├──" };
                 
-                log::info!("{} [Target] {}", branch, op.target);
+                log::info!("{} [Target: {}] {}", branch, op.partition_name, op.target);
                 
                 let prefix = if is_last_op { "    " } else { "│   " };
 
@@ -135,6 +136,7 @@ pub fn generate(
         }
 
         plan.overlay_ops.push(OverlayOperation {
+            partition_name: part,
             target: resolved_target.to_string_lossy().to_string(),
             lowerdirs: layers,
         });

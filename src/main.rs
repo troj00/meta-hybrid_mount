@@ -118,6 +118,11 @@ fn run() -> Result<()> {
     let plan = planner::generate(&config, &module_list, &storage_handle.mount_point)?;
     plan.print_visuals();
 
+    let active_mounts: Vec<String> = plan.overlay_ops
+        .iter()
+        .map(|op| op.partition_name.clone())
+        .collect();
+
     log::info!(">> Link Start! Executing mount plan...");
     let exec_result = executor::execute(&plan, &config)?;
 
@@ -147,7 +152,8 @@ fn run() -> Result<()> {
         storage_handle.mount_point,
         exec_result.overlay_module_ids,
         exec_result.magic_module_ids,
-        nuke_active
+        nuke_active,
+        active_mounts
     );
     
     if let Err(e) = state.save() {
