@@ -1,8 +1,14 @@
-<script>
-  let { values = $bindable([]), placeholder = "Add item...", onChange } = $props();
+<script lang="ts">
+  interface Props {
+    values: string[];
+    placeholder?: string;
+    onChange?: () => void;
+  }
+
+  let { values = $bindable([]), placeholder = "Add item...", onChange }: Props = $props();
   let inputValue = $state("");
 
-  function handleKeydown(e) {
+  function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter' || e.key === ',' || e.key === ' ') {
       e.preventDefault();
       addChip();
@@ -22,7 +28,7 @@
     }
   }
 
-  function removeChip(index) {
+  function removeChip(index: number) {
     values = values.filter((_, i) => i !== index);
     if (onChange) onChange();
   }
@@ -32,7 +38,7 @@
   {#each values as val, i}
     <span class="chip">
       {val}
-      <button class="chip-remove" onclick={() => removeChip(i)} tabindex="-1">
+      <button class="chip-remove" onclick={() => removeChip(i)} tabindex="-1" aria-label="Remove {val}">
         <svg viewBox="0 0 24 24" width="14" height="14"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor"/></svg>
       </button>
     </span>
@@ -49,7 +55,7 @@
   />
 
   {#if inputValue.trim().length > 0}
-    <button class="chip-add-btn" onclick={addChip} tabindex="-1">
+    <button class="chip-add-btn" onclick={addChip} tabindex="-1" aria-label="Add chip">
       <svg viewBox="0 0 24 24" width="20" height="20"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z" fill="currentColor"/></svg>
     </button>
   {/if}

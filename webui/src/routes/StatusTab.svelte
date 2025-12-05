@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { onMount } from 'svelte';
   import { store } from '../lib/store.svelte';
   import { ICONS } from '../lib/constants';

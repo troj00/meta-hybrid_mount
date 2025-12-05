@@ -1,13 +1,20 @@
-<script>
+<script lang="ts">
   import { store } from '../lib/store.svelte';
   import { ICONS } from '../lib/constants';
   import './NavBar.css';
-  let { activeTab, onTabChange } = $props();
+
+  interface Props {
+    activeTab: string;
+    onTabChange: (id: string) => void;
+  }
+
+  let { activeTab, onTabChange }: Props = $props();
+  
   let showLangMenu = $state(false);
-  let navContainer = $state();
-  let langButtonRef = $state();
-  let menuRef = $state();
-  let tabRefs = $state({});
+  let navContainer = $state<HTMLElement>();
+  let langButtonRef = $state<HTMLButtonElement>();
+  let menuRef = $state<HTMLDivElement>();
+  let tabRefs = $state<Record<string, HTMLButtonElement>>({});
   
   const TABS = [
     { id: 'status', icon: ICONS.home },
@@ -16,7 +23,7 @@
     { id: 'logs', icon: ICONS.description },
     { id: 'info', icon: ICONS.info }
   ];
-  
+
   $effect(() => {
     if (activeTab && tabRefs[activeTab] && navContainer) {
       const tab = tabRefs[activeTab];
@@ -33,8 +40,9 @@
   });
 
   function toggleTheme() {
-    let nextTheme;
-    let toastMsg;
+    let nextTheme: 'light' | 'dark' | 'auto';
+    let toastMsg: string;
+
     if (store.theme === 'auto') {
       nextTheme = 'light';
       toastMsg = store.L.common.themeLight;
@@ -56,15 +64,15 @@
     return ICONS.dark_mode;
   }
 
-  function setLang(code) {
+  function setLang(code: string) {
     store.setLang(code);
     showLangMenu = false;
   }
   
-  function handleOutsideClick(e) {
+  function handleOutsideClick(e: MouseEvent) {
     if (showLangMenu && 
-        menuRef && !menuRef.contains(e.target) && 
-        langButtonRef && !langButtonRef.contains(e.target)) {
+        menuRef && !menuRef.contains(e.target as Node) && 
+        langButtonRef && !langButtonRef.contains(e.target as Node)) {
       showLangMenu = false;
     }
   }
@@ -85,7 +93,7 @@
         onclick={() => showLangMenu = !showLangMenu} 
         title={store.L.common.language}
       >
-       <svg viewBox="0 0 24 24"><path d={ICONS.translate} fill="currentColor"/></svg>
+        <svg viewBox="0 0 24 24"><path d={ICONS.translate} fill="currentColor"/></svg>
       </button>
     </div>
   </div>
@@ -106,7 +114,7 @@
         bind:this={tabRefs[tab.id]}
       >
         <svg viewBox="0 0 24 24"><path d={tab.icon}/></svg>
-        <span>{store.L.tabs[tab.id]}</span>
+        <span>{store.L.tabs[tab.id as keyof typeof store.L.tabs]}</span>
       </button>
     {/each}
   </nav>

@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { store } from '../lib/store.svelte';
   import { ICONS } from '../lib/constants';
   import { onMount } from 'svelte';
@@ -8,7 +8,7 @@
 
   let searchQuery = $state('');
   let filterType = $state('all');
-  let expandedMap = $state({});
+  let expandedMap = $state<Record<string, boolean>>({});
   let initialModulesStr = $state('');
 
   onMount(() => {
@@ -40,7 +40,7 @@
     return matchSearch && matchFilter;
   }));
 
-  function toggleExpand(id) {
+  function toggleExpand(id: string) {
     if (expandedMap[id]) {
       delete expandedMap[id];
     } else {
@@ -49,7 +49,7 @@
     expandedMap = { ...expandedMap };
   }
 
-  function handleKeydown(e, id) {
+  function handleKeydown(e: KeyboardEvent, id: string) {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       toggleExpand(id);

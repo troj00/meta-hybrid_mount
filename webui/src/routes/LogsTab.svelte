@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { store } from '../lib/store.svelte';
   import { ICONS } from '../lib/constants';
   import { onMount, tick, onDestroy } from 'svelte';
@@ -7,11 +7,11 @@
 
   let searchLogQuery = $state('');
   let filterLevel = $state('all'); 
-  let logContainer;
+  let logContainer = $state<HTMLDivElement>();
   let autoRefresh = $state(false);
-  let refreshInterval;
+  let refreshInterval: any;
   let userHasScrolledUp = $state(false);
-  
+
   let filteredLogs = $derived(store.logs.filter(line => {
     const text = line.text.toLowerCase();
     const matchesSearch = text.includes(searchLogQuery.toLowerCase());
@@ -30,8 +30,9 @@
     }
   }
 
-  function handleScroll(e) {
-    const { scrollTop, scrollHeight, clientHeight } = e.target;
+  function handleScroll(e: Event) {
+    const target = e.target as HTMLElement;
+    const { scrollTop, scrollHeight, clientHeight } = target;
     const distanceToBottom = scrollHeight - scrollTop - clientHeight;
     userHasScrolledUp = distanceToBottom > 50;
   }

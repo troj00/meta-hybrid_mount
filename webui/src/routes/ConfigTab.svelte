@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { store } from '../lib/store.svelte';
   import { ICONS, DEFAULT_CONFIG } from '../lib/constants';
   import ChipInput from '../components/ChipInput.svelte';
@@ -6,11 +6,10 @@
 
   let initialConfigStr = $state('');
 
-  const isValidPath = (p) => !p || (p.startsWith('/') && p.length > 1);
-  
+  const isValidPath = (p: string) => !p || (p.startsWith('/') && p.length > 1);
   let invalidModuleDir = $derived(!isValidPath(store.config.moduledir));
   let invalidTempDir = $derived(store.config.tempdir && !isValidPath(store.config.tempdir));
-
+  
   let isDirty = $derived.by(() => {
     if (!initialConfigStr) return false;
     return JSON.stringify(store.config) !== initialConfigStr;

@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { onMount } from 'svelte';
   import { store } from '../lib/store.svelte';
   import { API } from '../lib/api';
@@ -12,7 +12,17 @@
   const CACHE_KEY = 'hm_contributors_cache';
   const CACHE_DURATION = 1000 * 60 * 60;
 
-  let contributors = $state([]);
+  interface Contributor {
+    login: string;
+    avatar_url: string;
+    html_url: string;
+    type: string;
+    url: string;
+    name?: string;
+    bio?: string;
+  }
+
+  let contributors = $state<Contributor[]>([]);
   let loading = $state(true);
   let error = $state(false);
 
@@ -40,13 +50,13 @@
       if (!res.ok) throw new Error('Failed to fetch list');
       
       const basicList = await res.json();
-      const filteredList = basicList.filter(user => {
+      const filteredList = basicList.filter((user: Contributor) => {
         const isBotType = user.type === 'Bot';
         const hasBotName = user.login.toLowerCase().includes('bot');
         return !isBotType && !hasBotName;
       });
 
-      const detailPromises = filteredList.map(async (user) => {
+      const detailPromises = filteredList.map(async (user: Contributor) => {
         try {
             const detailRes = await fetch(user.url);
             if (detailRes.ok) {
@@ -64,7 +74,6 @@
         data: contributors,
         timestamp: Date.now()
       }));
-
     } catch (e) {
       console.error(e);
       error = true;
@@ -73,7 +82,7 @@
     }
   }
 
-  function handleLink(e, url) {
+  function handleLink(e: Event, url: string) {
     e.preventDefault();
     API.openLink(url);
   }
