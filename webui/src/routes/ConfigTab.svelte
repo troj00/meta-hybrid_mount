@@ -1,27 +1,24 @@
 <script>
   import { store } from '../lib/store.svelte';
   import { ICONS, DEFAULT_CONFIG } from '../lib/constants';
-  import { onMount } from 'svelte';
+  import ChipInput from '../components/ChipInput.svelte';
   import './ConfigTab.css';
 
-  let partitionInput = $state('');
   let initialConfigStr = $state('');
 
   const isValidPath = (p) => !p || (p.startsWith('/') && p.length > 1);
+  
   let invalidModuleDir = $derived(!isValidPath(store.config.moduledir));
   let invalidTempDir = $derived(store.config.tempdir && !isValidPath(store.config.tempdir));
 
   let isDirty = $derived.by(() => {
     if (!initialConfigStr) return false;
-    const currentPartitions = partitionInput.split(',').map(s => s.trim()).filter(Boolean);
-    const currentConfig = { ...store.config, partitions: currentPartitions };
-    return JSON.stringify(currentConfig) !== initialConfigStr;
+    return JSON.stringify(store.config) !== initialConfigStr;
   });
 
   $effect(() => {
     if (!store.loading.config && store.config) {
       if (!initialConfigStr || initialConfigStr === JSON.stringify(DEFAULT_CONFIG)) {
-        partitionInput = store.config.partitions.join(', ');
         initialConfigStr = JSON.stringify(store.config);
       }
     }
@@ -32,17 +29,14 @@
       store.showToast(store.L.config.invalidPath, "error");
       return;
     }
-    store.config.partitions = partitionInput.split(',').map(s => s.trim()).filter(Boolean);
-    
     store.saveConfig().then(() => {
-      initialConfigStr = JSON.stringify(store.config);
+        initialConfigStr = JSON.stringify(store.config);
     });
   }
-
+  
   function reload() {
     store.loadConfig().then(() => {
-      partitionInput = store.config.partitions.join(', ');
-      initialConfigStr = JSON.stringify(store.config);
+        initialConfigStr = JSON.stringify(store.config);
     });
   }
 
@@ -87,29 +81,35 @@
     <input type="text" id="c-moduledir" bind:value={store.config.moduledir} placeholder={DEFAULT_CONFIG.moduledir} />
     <label for="c-moduledir">{store.L.config.moduleDir}</label>
   </div>
+  
   <div class="text-field" class:error={invalidTempDir} style="display:flex; align-items:center;">
     <input type="text" id="c-tempdir" bind:value={store.config.tempdir} placeholder={store.L.config.autoPlaceholder} />
     <label for="c-tempdir">{store.L.config.tempDir}</label>
+    
     {#if store.config.tempdir}
       <button class="icon-reset" onclick={resetTempDir} title={store.L.config.reset}>
         ✕
       </button>
     {/if}
   </div>
+  
   <div class="text-field">
     <input type="text" id="c-mountsource" bind:value={store.config.mountsource} placeholder={DEFAULT_CONFIG.mountsource} />
     <label for="c-mountsource">{store.L.config.mountSource}</label>
   </div>
-  <div class="text-field">
-    <input type="text" id="c-partitions" bind:value={partitionInput} placeholder="mi_ext, my_stock" />
-    <label for="c-partitions">{store.L.config.partitions}</label>
+  
+  <div style="position: relative; margin-top: 4px;">
+    <span style="font-size: 12px; color: var(--md-sys-color-primary); position: absolute; top: -9px; left: 12px; background: var(--md-sys-color-surface-container); padding: 0 4px; z-index: 1;">
+      {store.L.config.partitions}
+    </span>
+    <ChipInput bind:values={store.config.partitions} placeholder="mi_ext, product..." />
   </div>
 </div>
 
 <div class="bottom-actions">
   <button 
     class="btn-tonal" 
-    onclick={reload} 
+    onclick={reload}
     disabled={store.loading.config}
     title={store.L.config.reload}
   >
