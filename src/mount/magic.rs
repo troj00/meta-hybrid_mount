@@ -2,9 +2,11 @@ use std::{
     fs::{self, DirEntry, create_dir, create_dir_all, read_dir, read_link},
     os::unix::fs::{MetadataExt, symlink},
     path::{Path, PathBuf},
+    collections::hash_map::Entry,
 };
 
 use anyhow::{Context, Result, bail};
+use rayon::prelude::*;
 use rustix::{
     fs::{Gid, Mode, Uid, chmod, chown},
     mount::{
@@ -22,76 +24,111 @@ use crate::{
     utils::{ensure_dir_exists, lgetfilecon, lsetfilecon},
 };
 
-fn collect_module_files(module_paths: &[PathBuf], extra_partitions: &[String]) -> Result<Option<Node>> {
+const ROOT_PARTITIONS: [&str; 4] = [
+    "vendor",
+    "system_ext",
+    "product",
+    "odm",
+];
+
+fn merge_nodes(high: &mut Node, low: Node) {
+    if high.module_path.is_none() {
+        high.module_path = low.module_path;
+        high.file_type = low.file_type;
+        high.replace = low.replace;
+    }
+
+    for (name, low_child) in low.children {
+        match high.children.entry(name) {
+            Entry::Vacant(v) => {
+                v.insert(low_child);
+            }
+            Entry::Occupied(mut o) => {
+                merge_nodes(o.get_mut(), low_child);
+            }
+        }
+    }
+}
+
+fn process_module(path: &Path, extra_partitions: &[String]) -> Result<(Node, Node)> {
     let mut root = Node::new_root("");
     let mut system = Node::new_root("system");
-    let mut has_file = false;
 
-    const ROOT_PARTITIONS: [&str; 4] = [
-        "vendor",
-        "system_ext",
-        "product",
-        "odm",
-    ];
+    if path.join(DISABLE_FILE_NAME).exists()
+        || path.join(REMOVE_FILE_NAME).exists()
+        || path.join(SKIP_MOUNT_FILE_NAME).exists()
+    {
+        return Ok((root, system));
+    }
 
-    for path in module_paths {
-        if path.join(DISABLE_FILE_NAME).exists()
-            || path.join(REMOVE_FILE_NAME).exists()
-            || path.join(SKIP_MOUNT_FILE_NAME).exists()
-        {
+    let mod_system = path.join("system");
+    if mod_system.is_dir() {
+        system.collect_module_files(&mod_system)?;
+    }
+
+    for partition in ROOT_PARTITIONS {
+        let mod_part = path.join(partition);
+        if mod_part.is_dir() {
+            let node = system.children.entry(partition.to_string())
+                .or_insert_with(|| Node::new_root(partition));
+            
+            if node.file_type == NodeFileType::Symlink {
+                node.file_type = NodeFileType::Directory;
+                node.module_path = None;
+            }
+
+            node.collect_module_files(&mod_part)?;
+        }
+    }
+
+    for partition in extra_partitions {
+        if ROOT_PARTITIONS.contains(&partition.as_str()) || partition == "system" {
             continue;
         }
 
-        let mod_system = path.join("system");
-        if mod_system.is_dir() {
-            has_file |= system.collect_module_files(&mod_system)?;
-        }
+        let path_of_root = Path::new("/").join(partition);
+        let path_of_system = Path::new("/system").join(partition);
 
-        for partition in ROOT_PARTITIONS {
+        if path_of_root.is_dir() && path_of_system.is_symlink() {
+            let name = partition.clone();
+            let mod_part = path.join(partition);
+            
+            if mod_part.is_dir() {
+                let node = root.children.entry(name)
+                    .or_insert_with(|| Node::new_root(partition));
+                node.collect_module_files(&mod_part)?;
+            }
+        } else if path_of_root.is_dir() {
+            let name = partition.clone();
             let mod_part = path.join(partition);
             if mod_part.is_dir() {
-                let node = system.children.entry(partition.to_string())
+                let node = root.children.entry(name)
                     .or_insert_with(|| Node::new_root(partition));
-                
-                if node.file_type == NodeFileType::Symlink {
-                    node.file_type = NodeFileType::Directory;
-                    node.module_path = None;
-                }
-
-                has_file |= node.collect_module_files(&mod_part)?;
-            }
-        }
-
-        for partition in extra_partitions {
-            if ROOT_PARTITIONS.contains(&partition.as_str()) || partition == "system" {
-                continue;
-            }
-
-            let path_of_root = Path::new("/").join(partition);
-            let path_of_system = Path::new("/system").join(partition);
-
-            if path_of_root.is_dir() && path_of_system.is_symlink() {
-                let name = partition.clone();
-                let mod_part = path.join(partition);
-                
-                if mod_part.is_dir() {
-                    let node = root.children.entry(name)
-                        .or_insert_with(|| Node::new_root(partition));
-                    has_file |= node.collect_module_files(&mod_part)?;
-                }
-            } else if path_of_root.is_dir() {
-                let name = partition.clone();
-                let mod_part = path.join(partition);
-                if mod_part.is_dir() {
-                    let node = root.children.entry(name)
-                        .or_insert_with(|| Node::new_root(partition));
-                    has_file |= node.collect_module_files(&mod_part)?;
-                }
+                node.collect_module_files(&mod_part)?;
             }
         }
     }
 
-    if has_file {
+    Ok((root, system))
+}
+
+fn collect_module_files(module_paths: &[PathBuf], extra_partitions: &[String]) -> Result<Option<Node>> {
+    let (mut final_root, mut final_system) = module_paths.par_iter()
+        .map(|path| process_module(path, extra_partitions))
+        .reduce(
+            || Ok((Node::new_root(""), Node::new_root("system"))),
+            |a, b| {
+                let (mut r_a, mut s_a) = a?;
+                let (r_b, s_b) = b?;
+                merge_nodes(&mut r_a, r_b);
+                merge_nodes(&mut s_a, s_b);
+                Ok((r_a, s_a))
+            }
+        )?;
+
+    let has_content = !final_root.children.is_empty() || !final_system.children.is_empty();
+
+    if has_content {
         const BUILTIN_CHECKS: [(&str, bool); 4] = [
             ("vendor", true),
             ("system_ext", true),
@@ -105,14 +142,14 @@ fn collect_module_files(module_paths: &[PathBuf], extra_partitions: &[String]) -
 
             if path_of_root.is_dir() && (!require_symlink || path_of_system.is_symlink()) {
                 let name = partition.to_string();
-                if let Some(node) = system.children.remove(&name) {
-                    root.children.insert(name, node);
+                if let Some(node) = final_system.children.remove(&name) {
+                    final_root.children.insert(name, node);
                 }
             }
         }
 
-        root.children.insert("system".to_string(), system);
-        Ok(Some(root))
+        final_root.children.insert("system".to_string(), final_system);
+        Ok(Some(final_root))
     } else {
         Ok(None)
     }
