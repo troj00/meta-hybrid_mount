@@ -170,6 +170,23 @@ const RealAPI = {
   },
 
   getVersion: async (): Promise<string> => {
+    if (!ksuExec) return "v1.0.0";
+    try {
+        const binPath = PATHS.BINARY;
+        const moduleDir = binPath.substring(0, binPath.lastIndexOf('/'));
+        const propPath = `${moduleDir}/module.prop`;
+        const cmd = `grep "^version=" "${propPath}"`;
+        const { errno, stdout } = await ksuExec(cmd);
+        
+        if (errno === 0 && stdout) {
+            const match = stdout.match(/^version=(.+)$/m);
+            if (match && match[1]) {
+                return match[1].trim();
+            }
+        }
+    } catch (e) {
+        console.error("Failed to read module version", e);
+    }
     return "v1.0.0";
   },
 

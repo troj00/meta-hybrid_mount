@@ -25,8 +25,17 @@
   let contributors = $state<Contributor[]>([]);
   let loading = $state(true);
   let error = $state(false);
+  
+  let version = $state(store.version);
 
   onMount(async () => {
+    try {
+        const v = await API.getVersion();
+        if (v) version = v;
+    } catch (e) {
+        console.error("Failed to fetch version", e);
+    }
+
     await fetchContributors();
   });
 
@@ -104,20 +113,21 @@
                 <rect x="0" y="0" width="100" height="100" rx="16" ry="16" />
               </clipPath>
             </defs>
-            <rect x="0" y="0" width="100" height="100" rx="16" ry="16" fill="var(--md-sys-color-primary-container)" />
+            <rect x="0" y="0" width="100" height="100" 
+                  rx="16" ry="16" fill="var(--md-sys-color-primary-container)" />
             <g clip-path="url(#logoBlockClip)">
               <rect x="0" y="0" width="50" height="50" fill="var(--md-sys-color-primary)" />
               <rect x="50" y="50" width="50" height="50" fill="var(--md-sys-color-primary)" />
             </g>
           </g>
           <g transform="translate(15, -95)">
-            <rect x="0" y="0" width="100" height="100" rx="16" ry="16" fill="var(--md-sys-color-tertiary-container)" />
+             <rect x="0" y="0" width="100" height="100" rx="16" ry="16" fill="var(--md-sys-color-tertiary-container)" />
           </g>
         </g>
       </svg>
     </div>
     <span class="app-name">{store.L.common.appName}</span>
-    <span class="app-version">{store.version}</span>
+    <span class="app-version">{version}</span>
   </div>
 
   <div class="action-grid">
@@ -146,7 +156,7 @@
                     <Skeleton width="48px" height="48px" borderRadius="50%" />
                     <div class="c-info">
                         <div class="skeleton-spacer">
-                            <Skeleton width="120px" height="16px" />
+                             <Skeleton width="120px" height="16px" />
                         </div>
                         <Skeleton width="200px" height="12px" />
                     </div>
