@@ -134,6 +134,7 @@ Meta-Hybrid Mount 的工作流程如下：
 ## 🤝 贡献与致谢
 
 * 感谢所有开源社区的贡献者。
+* 我们的姊妹项目[Hymo](https://github.com/Anatdx/hymo)，欢迎支持，呱唧呱唧呱唧。
 * 本项目使用了 `rustix`, `clap`, `serde`, `svelte` 等优秀的开源库。
 
 ## 📄 许可证
