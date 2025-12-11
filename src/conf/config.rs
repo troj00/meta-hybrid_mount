@@ -22,6 +22,8 @@ pub struct Config {
     #[serde(default)]
     pub disable_umount: bool,
     #[serde(default)]
+    pub allow_umount_coexistence: bool,
+    #[serde(default)]
     pub dry_run: bool,
 }
 fn default_moduledir() -> PathBuf {
@@ -60,6 +62,7 @@ impl Default for Config {
             force_ext4: false,
             enable_nuke: false,
             disable_umount: false,
+            allow_umount_coexistence: false,
             dry_run: false,
         }
     }

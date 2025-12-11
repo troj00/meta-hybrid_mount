@@ -52,7 +52,8 @@ const RealAPI = {
     try {
       const { errno, stdout } = await ksuExec(cmd);
       if (errno === 0 && stdout) {
-        return JSON.parse(stdout);
+        const loaded = JSON.parse(stdout);
+        return { ...DEFAULT_CONFIG, ...loaded };
       } else {
         console.warn("Config load returned non-zero or empty, using defaults");
         return DEFAULT_CONFIG;
@@ -139,6 +140,13 @@ const RealAPI = {
           else if (line.startsWith('SELINUX:')) info.selinux = line.substring(8).trim();
         });
       }
+      
+      const cmdZygisk = `[ -f "/data/adb/zygisksu/denylist_enforce" ] && cat "/data/adb/zygisksu/denylist_enforce" || echo "0"`;
+      const { errno: errZygisk, stdout: outZygisk } = await ksuExec(cmdZygisk);
+      if (errZygisk === 0) {
+          info.zygisksuEnforce = outZygisk.trim();
+      }
+
       const stateFile = (PATHS as any).DAEMON_STATE || "/data/adb/meta-hybrid/run/daemon_state.json";
       const cmdState = `cat "${stateFile}"`;
       const { errno: errState, stdout: outState } = await ksuExec(cmdState);
@@ -153,7 +161,7 @@ const RealAPI = {
           console.error("Failed to parse daemon state JSON", e);
         }
       } else {
-          const mntPath = (PATHS as any).IMAGE_MNT || "/data/adb/meta-hybrid/mnt";
+          const mntPath = (PATHS as any).IMAGE_MNT || "/data/adb/meta-hybrid/img_mnt";
           const m = await ksuExec(`mount | grep "${mntPath}" | head -n 1`);
           if (m.errno === 0 && m.stdout) {
               const parts = m.stdout.split(' ');

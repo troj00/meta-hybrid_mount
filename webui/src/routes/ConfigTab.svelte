@@ -20,6 +20,13 @@
       }
     }
   });
+  $effect(() => {
+    if (store.systemInfo?.zygisksuEnforce && store.systemInfo.zygisksuEnforce !== '0' && !store.config.allow_umount_coexistence) {
+        if (!store.config.disable_umount) {
+            store.config.disable_umount = true;
+        }
+    }
+  });
   function save() {
     if (invalidModuleDir || invalidTempDir) {
       store.showToast(store.L.config.invalidPath, "error");
@@ -38,6 +45,12 @@
     store.config.tempdir = "";
   }
   function toggle(key: keyof typeof store.config) {
+    if (key === 'disable_umount') {
+       if (store.systemInfo?.zygisksuEnforce && store.systemInfo.zygisksuEnforce !== '0' && !store.config.allow_umount_coexistence) {
+          store.showToast(store.L.config?.coexistenceRequired || "Coexistence required", "error");
+          return;
+       }
+    }
     if (typeof store.config[key] === 'boolean') {
       (store.config as any)[key] = !store.config[key];
     }
@@ -143,6 +156,23 @@
           <span class="tile-label">{store.L.config.disableUmount}</span>
         </div>
       </button>
+      {#if store.systemInfo?.zygisksuEnforce && store.systemInfo.zygisksuEnforce !== '0'}
+        <button 
+          class="option-tile clickable error" 
+          class:active={store.config.allow_umount_coexistence} 
+          onclick={() => toggle('allow_umount_coexistence')}
+          transition:slide
+        >
+          <div class="tile-top">
+            <div class="tile-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24"><path d={ICONS.shield} fill="currentColor"/></svg>
+            </div>
+          </div>
+          <div class="tile-bottom">
+            <span class="tile-label">{store.L.config?.allowUmountCoexistence || 'Allow Coexistence'}</span>
+          </div>
+        </button>
+      {/if}
       <button 
         class="option-tile clickable primary" 
         class:active={store.config.verbose} 

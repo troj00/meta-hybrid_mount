@@ -40,6 +40,8 @@
     "forceExt4": "Ext4 Mode",
     "enableNuke": "Enable Paw Pad",
     "disableUmount": "Disable Umount",
+    "allowUmountCoexistence": "Allow Umount Coexistence",
+    "coexistenceRequired": "Coexistence option required",
     "moduleDir": "Module Directory",
     "tempDir": "Temp Directory",
     "mountSource": "Mount Source",

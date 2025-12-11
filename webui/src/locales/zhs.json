@@ -40,6 +40,8 @@
     "forceExt4": "强制 Ext4 模式",
     "enableNuke": "启用肉垫",
     "disableUmount": "禁用Umount",
+    "allowUmountCoexistence": "允许Umount共存",
+    "coexistenceRequired": "需开启共存选项",
     "moduleDir": "模块路径",
     "tempDir": "临时路径",
     "mountSource": "挂载源名",

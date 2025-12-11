@@ -36,6 +36,11 @@ fn load_config(cli: &Cli) -> Result<Config> {
         }
     }
 }
+fn check_zygisksu_enforce_status() -> bool {
+    std::fs::read_to_string("/data/adb/zygisksu/denylist_enforce")
+        .map(|s| s.trim() != "0")
+        .unwrap_or(false)
+}
 fn run() -> Result<()> {
     let cli = Cli::parse();
     if let Some(command) = &cli.command {
@@ -96,6 +101,18 @@ fn run() -> Result<()> {
         cli.partitions.clone(),
         cli.dry_run,
     );
+    if check_zygisksu_enforce_status() {
+        if config.allow_umount_coexistence {
+            if config.verbose {
+                println!(">> ZygiskSU Enforce=2 detected, but Umount Coexistence enabled. Respecting user config.");
+            }
+        } else {
+            if config.verbose {
+                println!(">> ZygiskSU Enforce=2 detected. Forcing DISABLE_UMOUNT to TRUE.");
+            }
+            config.disable_umount = true;
+        }
+    }
     if config.dry_run {
         env_logger::builder()
             .filter_level(if config.verbose { log::LevelFilter::Debug } else { log::LevelFilter::Info })

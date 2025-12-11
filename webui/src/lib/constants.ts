@@ -10,6 +10,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   force_ext4: false,
   enable_nuke: false,
   disable_umount: false,
+  allow_umount_coexistence: false,
   dry_run: false
 };
 export const PATHS = {
@@ -41,5 +42,6 @@ export const ICONS = {
   anchor: "M17 13h-2v-4h-2V6h2V4h-2V2h-2v2H9v2h2v3H9v4H7v2c0 2.76 2.24 5 5 5s5-2.24 5-5v-2zm-5 5c-1.65 0-3-1.35-3-3v-2h6v2c0 1.65-1.35 3-3 3z", 
   timer: "M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42A8.962 8.962 0 0012 4c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.52.02-1.02.05-1.52zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z",
   delete: "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z",
-  add: "M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"
+  add: "M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z",
+  shield: "M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"
 };
