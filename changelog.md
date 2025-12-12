@@ -1,7 +1,9 @@
-## v1.5.0
+## v1.5.1
 
 Changes since v1.4.0:
-* feat: Add automatic backup
+* fix: compiling warnings
+* chore(release): bump version to v1.5.0 [skip ci]
+* [skip ci]feat: Add automatic backup
 * workflow: sync release to repo
 * feat(core): implement dynamic system-based temp directory strategy
 * fix(hymofs): suppress unused code warnings
