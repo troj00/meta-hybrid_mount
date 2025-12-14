@@ -6,9 +6,11 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use log::{debug, warn};
 use walkdir::WalkDir;
+use libc::{c_int, c_ulong, c_char};
 
 const DEV_PATH: &str = "/dev/hymo_ctl";
 const HYMO_IOC_MAGIC: u8 = 0xE0;
+const HYMO_PROTOCOL_VERSION: i32 = 5;
 
 const _IOC_NRBITS: u32 = 8;
 const _IOC_TYPEBITS: u32 = 8;
@@ -25,62 +27,49 @@ const _IOC_WRITE: u32 = 1;
 const _IOC_READ: u32 = 2;
 const _IOC_READ_WRITE: u32 = 3;
 
-macro_rules! _IOC {
-    ($dir:expr, $type:expr, $nr:expr, $size:expr) => {
-        (($dir) << _IOC_DIRSHIFT) |
-        (($type) << _IOC_TYPESHIFT) |
-        (($nr) << _IOC_NRSHIFT) |
-        (($size) << _IOC_SIZESHIFT)
-    };
+const fn _ioc(dir: u32, type_: u8, nr: u8, size: usize) -> c_ulong {
+    ((dir << _IOC_DIRSHIFT) |
+     ((type_ as u32) << _IOC_TYPESHIFT) |
+     ((nr as u32) << _IOC_NRSHIFT) |
+     ((size as u32) << _IOC_SIZESHIFT)) as c_ulong
 }
 
-macro_rules! _IO {
-    ($type:expr, $nr:expr) => {
-        _IOC!(_IOC_NONE, $type, $nr, 0)
-    };
+const fn _io(type_: u8, nr: u8) -> c_ulong {
+    _ioc(_IOC_NONE, type_, nr, 0)
 }
 
-macro_rules! _IOR {
-    ($type:expr, $nr:expr, $size:ty) => {
-        _IOC!(_IOC_READ, $type, $nr, std::mem::size_of::<$size>() as u32)
-    };
+const fn _ior<T>(type_: u8, nr: u8) -> c_ulong {
+    _ioc(_IOC_READ, type_, nr, std::mem::size_of::<T>())
 }
 
-macro_rules! _IOW {
-    ($type:expr, $nr:expr, $size:ty) => {
-        _IOC!(_IOC_WRITE, $type, $nr, std::mem::size_of::<$size>() as u32)
-    };
+const fn _iow<T>(type_: u8, nr: u8) -> c_ulong {
+    _ioc(_IOC_WRITE, type_, nr, std::mem::size_of::<T>())
 }
 
-macro_rules! _IOWR {
-    ($type:expr, $nr:expr, $size:ty) => {
-        _IOC!(_IOC_READ_WRITE, $type, $nr, std::mem::size_of::<$size>() as u32)
-    };
+const fn _iowr<T>(type_: u8, nr: u8) -> c_ulong {
+    _ioc(_IOC_READ_WRITE, type_, nr, std::mem::size_of::<T>())
 }
+
+const HYMO_IOC_ADD_RULE: c_ulong    = _iow::<HymoIoctlArg>(HYMO_IOC_MAGIC, 1);
+const HYMO_IOC_DEL_RULE: c_ulong    = _iow::<HymoIoctlArg>(HYMO_IOC_MAGIC, 2);
+const HYMO_IOC_HIDE_RULE: c_ulong   = _iow::<HymoIoctlArg>(HYMO_IOC_MAGIC, 3);
+const HYMO_IOC_CLEAR_ALL: c_ulong   = _io(HYMO_IOC_MAGIC, 5);
+const HYMO_IOC_GET_VERSION: c_ulong = _ior::<c_int>(HYMO_IOC_MAGIC, 6);
+const HYMO_IOC_LIST_RULES: c_ulong  = _iowr::<HymoIoctlListArg>(HYMO_IOC_MAGIC, 7);
+const HYMO_IOC_SET_DEBUG: c_ulong   = _iow::<c_int>(HYMO_IOC_MAGIC, 8);
 
 #[repr(C)]
 struct HymoIoctlArg {
-    src: *const libc::c_char,
-    target: *const libc::c_char,
-    r#type: libc::c_int,
+    src: *const c_char,
+    target: *const c_char,
+    r#type: c_int,
 }
 
-#[allow(dead_code)]
 #[repr(C)]
 struct HymoIoctlListArg {
-    buf: *mut libc::c_char,
+    buf: *mut c_char,
     size: usize,
 }
-
-fn ioc_add_rule() -> libc::c_int { _IOW!(HYMO_IOC_MAGIC as u32, 1, HymoIoctlArg) as libc::c_int }
-#[allow(dead_code)]
-fn ioc_del_rule() -> libc::c_int { _IOW!(HYMO_IOC_MAGIC as u32, 2, HymoIoctlArg) as libc::c_int }
-fn ioc_hide_rule() -> libc::c_int { _IOW!(HYMO_IOC_MAGIC as u32, 3, HymoIoctlArg) as libc::c_int }
-fn ioc_clear_all() -> libc::c_int { _IO!(HYMO_IOC_MAGIC as u32, 5) as libc::c_int }
-fn ioc_get_version() -> libc::c_int { _IOR!(HYMO_IOC_MAGIC as u32, 6, libc::c_int) as libc::c_int }
-#[allow(dead_code)]
-fn ioc_list_rules() -> libc::c_int { _IOWR!(HYMO_IOC_MAGIC as u32, 7, HymoIoctlListArg) as libc::c_int }
-fn ioc_set_debug() -> libc::c_int { _IOW!(HYMO_IOC_MAGIC as u32, 8, libc::c_int) as libc::c_int }
 
 #[derive(Debug, PartialEq)]
 pub enum HymoFsStatus {
@@ -105,9 +94,10 @@ impl HymoFs {
             return HymoFsStatus::NotPresent;
         }
         if let Some(ver) = Self::get_version() {
-            if ver == crate::defs::HYMO_PROTOCOL_VERSION {
+            if ver == HYMO_PROTOCOL_VERSION {
                 HymoFsStatus::Available
             } else {
+                debug!("HymoFS protocol mismatch: kernel={}, user={}", ver, HYMO_PROTOCOL_VERSION);
                 HymoFsStatus::ProtocolMismatch
             }
         } else {
@@ -121,9 +111,9 @@ impl HymoFs {
 
     pub fn get_version() -> Option<i32> {
         let file = Self::open_dev().ok()?;
-        let mut ver: libc::c_int = 0;
+        let mut ver: c_int = 0;
         let ret = unsafe {
-            libc::ioctl(file.as_raw_fd(), ioc_get_version(), &mut ver)
+            libc::ioctl(file.as_raw_fd(), HYMO_IOC_GET_VERSION, &mut ver)
         };
         if ret < 0 {
             None
@@ -136,7 +126,7 @@ impl HymoFs {
         debug!("HymoFS: Clearing all rules");
         let file = Self::open_dev()?;
         let ret = unsafe {
-            libc::ioctl(file.as_raw_fd(), ioc_clear_all())
+            libc::ioctl(file.as_raw_fd(), HYMO_IOC_CLEAR_ALL)
         };
         if ret < 0 {
             let err = std::io::Error::last_os_error();
@@ -147,9 +137,9 @@ impl HymoFs {
 
     pub fn set_debug(enable: bool) -> Result<()> {
         let file = Self::open_dev()?;
-        let val: libc::c_int = if enable { 1 } else { 0 };
+        let val: c_int = if enable { 1 } else { 0 };
         let ret = unsafe {
-            libc::ioctl(file.as_raw_fd(), ioc_set_debug(), &val)
+            libc::ioctl(file.as_raw_fd(), HYMO_IOC_SET_DEBUG, &val)
         };
         if ret < 0 {
             let err = std::io::Error::last_os_error();
@@ -167,11 +157,11 @@ impl HymoFs {
         let arg = HymoIoctlArg {
             src: c_src.as_ptr(),
             target: c_target.as_ptr(),
-            r#type: type_val as libc::c_int,
+            r#type: type_val as c_int,
         };
 
         let ret = unsafe {
-            libc::ioctl(file.as_raw_fd(), ioc_add_rule(), &arg)
+            libc::ioctl(file.as_raw_fd(), HYMO_IOC_ADD_RULE, &arg)
         };
 
         if ret < 0 {
@@ -194,7 +184,7 @@ impl HymoFs {
         };
 
         let ret = unsafe {
-            libc::ioctl(file.as_raw_fd(), ioc_del_rule(), &arg)
+            libc::ioctl(file.as_raw_fd(), HYMO_IOC_DEL_RULE, &arg)
         };
 
         if ret < 0 {
@@ -216,7 +206,7 @@ impl HymoFs {
         };
 
         let ret = unsafe {
-            libc::ioctl(file.as_raw_fd(), ioc_hide_rule(), &arg)
+            libc::ioctl(file.as_raw_fd(), HYMO_IOC_HIDE_RULE, &arg)
         };
 
         if ret < 0 {
@@ -232,12 +222,12 @@ impl HymoFs {
         let capacity = 128 * 1024;
         let mut buffer = vec![0u8; capacity];
         let mut arg = HymoIoctlListArg {
-            buf: buffer.as_mut_ptr() as *mut libc::c_char,
+            buf: buffer.as_mut_ptr() as *mut c_char,
             size: capacity,
         };
 
         let ret = unsafe {
-            libc::ioctl(file.as_raw_fd(), ioc_list_rules(), &mut arg)
+            libc::ioctl(file.as_raw_fd(), HYMO_IOC_LIST_RULES, &mut arg)
         };
 
         if ret < 0 {
@@ -245,7 +235,7 @@ impl HymoFs {
             anyhow::bail!("HymoFS list_rules failed: {}", err);
         }
 
-        let c_str = unsafe { CStr::from_ptr(buffer.as_ptr() as *const libc::c_char) };
+        let c_str = unsafe { CStr::from_ptr(buffer.as_ptr() as *const c_char) };
         Ok(c_str.to_string_lossy().into_owned())
     }
 
