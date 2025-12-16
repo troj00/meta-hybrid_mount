@@ -2,8 +2,10 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use anyhow::Result;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use crate::{defs, conf::config};
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum MountMode {
@@ -12,11 +14,13 @@ pub enum MountMode {
     Magic,
     Ignore,
 }
+
 impl Default for MountMode {
     fn default() -> Self {
         MountMode::Overlay
     }
 }
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ModuleRules {
     #[serde(default)]
@@ -24,6 +28,7 @@ pub struct ModuleRules {
     #[serde(default)]
     pub paths: HashMap<String, MountMode>, 
 }
+
 impl ModuleRules {
     pub fn load(module_dir: &Path, module_id: &str) -> Self {
         let mut rules = ModuleRules::default();
@@ -50,35 +55,50 @@ impl ModuleRules {
         self.default_mode.clone()
     }
 }
+
 #[derive(Debug, Clone)]
 pub struct Module {
     pub id: String,
     pub source_path: PathBuf,
     pub rules: ModuleRules,
 }
+
 pub fn scan(source_dir: &Path, _config: &config::Config) -> Result<Vec<Module>> {
-    let mut modules = Vec::new();
     if !source_dir.exists() {
-        return Ok(modules);
+        return Ok(Vec::new());
     }
-    for entry in fs::read_dir(source_dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if !path.is_dir() { continue; }
-        let id = entry.file_name().to_string_lossy().to_string();
-        if id == "meta-hybrid" || id == "lost+found" || id == ".git" { continue; }
-        if path.join(defs::DISABLE_FILE_NAME).exists() || 
-           path.join(defs::REMOVE_FILE_NAME).exists() || 
-           path.join(defs::SKIP_MOUNT_FILE_NAME).exists() { 
-            continue; 
-        }
-        let rules = ModuleRules::load(&path, &id);
-        modules.push(Module {
-            id,
-            source_path: path,
-            rules,
-        });
-    }
+
+    let dir_entries = fs::read_dir(source_dir)?
+        .collect::<std::io::Result<Vec<_>>>()?;
+
+    let mut modules: Vec<Module> = dir_entries
+        .into_par_iter()
+        .filter_map(|entry| {
+            let path = entry.path();
+            if !path.is_dir() { return None; }
+            
+            let id = entry.file_name().to_string_lossy().to_string();
+            
+            if id == "meta-hybrid" || id == "lost+found" || id == ".git" { 
+                return None; 
+            }
+            
+            if path.join(defs::DISABLE_FILE_NAME).exists() || 
+               path.join(defs::REMOVE_FILE_NAME).exists() || 
+               path.join(defs::SKIP_MOUNT_FILE_NAME).exists() { 
+                return None; 
+            }
+            
+            let rules = ModuleRules::load(&path, &id);
+            
+            Some(Module {
+                id,
+                source_path: path,
+                rules,
+            })
+        })
+        .collect();
+
     modules.sort_by(|a, b| b.id.cmp(&a.id));
     Ok(modules)
 }
