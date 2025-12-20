@@ -107,6 +107,17 @@ pub fn list_silos() -> Result<Vec<Silo>> {
     Ok(silos)
 }
 
+pub fn delete_silo(id: &str) -> Result<()> {
+    let file_path = Path::new(GRANARY_DIR).join(format!("{}.json", id));
+    if file_path.exists() {
+        fs::remove_file(&file_path)?;
+        log::info!("Deleted Silo: {}", id);
+        Ok(())
+    } else {
+        bail!("Silo {} not found", id);
+    }
+}
+
 pub fn restore_silo(id: &str) -> Result<()> {
     let file_path = Path::new(GRANARY_DIR).join(format!("{}.json", id));
     if !file_path.exists() {
