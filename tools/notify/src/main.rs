@@ -30,7 +30,11 @@ fn main() {
             let path = entry.path();
             if let Some(ext) = path.extension() {
                 if ext == "zip" {
-                    zip_file = Some(path);
+                    if let Ok(abs_path) = fs::canonicalize(&path) {
+                        zip_file = Some(abs_path);
+                    } else {
+                        zip_file = Some(path);
+                    }
                     break;
                 }
             }
@@ -49,6 +53,7 @@ fn main() {
     let file_size = fs::metadata(&file_path).map(|m| m.len()).unwrap_or(0) as f64 / 1024.0 / 1024.0;
 
     println!("Selecting yield: {} ({:.2} MB)", file_name, file_size);
+    println!("Debug: Absolute path is {}", file_path.display());
 
     let commit_msg = get_git_commit_message();
     let safe_commit_msg = escape_html(&commit_msg);
@@ -63,7 +68,6 @@ fn main() {
     );
 
     let url = format!("https://api.telegram.org/bot{}/sendDocument", bot_token);
-
     let mut curl_args = vec![
         "-F".to_string(),
         format!("chat_id={}", chat_id),
