@@ -112,5 +112,4 @@ This project uses Rust's `xtask` pattern for a unified build process.
 ## 🤝 Contributions & Credits
 
 * Thanks to all contributors in the open-source community.
-* **Sister Project**: [Hymo](https://github.com/Anatdx/hymo) - The kernel-side powerhouse behind HymoFS.
 * **License**: This project is licensed under the [GPL-3.0 License](https://github.com/YuzakiKokuban/meta-hybrid_mount/blob/master/LICENSE).
