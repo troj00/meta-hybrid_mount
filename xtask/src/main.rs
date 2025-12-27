@@ -6,13 +6,11 @@ use clap::{Parser, Subcommand, ValueEnum};
 use fs_extra::dir::{self, CopyOptions};
 use std::{
     env, fs,
-    io::Write,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
 };
 use tempfile::NamedTempFile;
 use zip::{write::FileOptions, CompressionMethod};
-use base64::{engine::general_purpose, Engine as _};
 
 mod zip_ext;
 use crate::zip_ext::zip_create_from_directory_with_options;
@@ -70,10 +68,14 @@ enum Commands {
         skip_webui: bool,
         #[arg(long, value_enum)]
         arch: Option<Arch>,
-        #[arg(long)]
-        key: Option<PathBuf>,
-        #[arg(long)]
-        cert: Option<PathBuf>,
+
+        /// Path to the encrypted private key (default: private.enc)
+        #[arg(long, default_value = "private.enc")]
+        key_enc: PathBuf,
+
+        /// Path to the certificate (default: cert.pem)
+        #[arg(long, default_value = "cert.pem")]
+        cert: PathBuf,
     },
     Lint,
 }
@@ -86,10 +88,10 @@ fn main() -> Result<()> {
             release,
             skip_webui,
             arch,
-            key,
+            key_enc,
             cert,
         } => {
-            build_full(&root, release, skip_webui, arch, key, cert)?;
+            build_full(&root, release, skip_webui, arch, &key_enc, &cert)?;
         }
         Commands::Lint => {
             run_clippy(&root)?;
@@ -138,8 +140,8 @@ fn build_full(
     release: bool,
     skip_webui: bool,
     target_arch: Option<Arch>,
-    key_arg: Option<PathBuf>,
-    cert_arg: Option<PathBuf>,
+    key_enc_path: &Path,
+    cert_path: &Path,
 ) -> Result<()> {
     let output_dir = root.join("output");
     let stage_dir = output_dir.join("staging");
@@ -194,69 +196,72 @@ fn build_full(
         .compression_level(Some(9));
     zip_create_from_directory_with_options(&zip_file, &stage_dir, |_| zip_options)?;
     println!(":: Build Complete: {}", zip_file.display());
-    let (signing_key, signing_cert, _temp_guards) = resolve_signing_creds(key_arg, cert_arg)?;
-    if let (Some(k), Some(c)) = (signing_key, signing_cert) {
-        sign_module(&zip_file, &k, &c)?;
+    if let Ok(password) = env::var("META_HYBRID_SIGN_PASSWORD") {
+        if !password.is_empty() {
+            let abs_key_enc = root.join(key_enc_path);
+            let abs_cert = root.join(cert_path);
+
+            if abs_key_enc.exists() && abs_cert.exists() {
+                decrypt_and_sign(&zip_file, &abs_key_enc, &abs_cert, &password)?;
+            } else {
+                println!(":: Skipping signature: private.enc or cert.pem not found at root.");
+            }
+        }
+    } else {
+        println!(":: Skipping signature: META_HYBRID_SIGN_PASSWORD not set.");
     }
-    println!(":: Build Complete: {}", zip_file.display());
+
     Ok(())
 }
 
-fn resolve_signing_creds(
-    arg_key: Option<PathBuf>,
-    arg_cert: Option<PathBuf>,
-) -> Result<(Option<PathBuf>, Option<PathBuf>, Vec<NamedTempFile>)> {
-    if let (Some(k), Some(c)) = (arg_key, arg_cert) {
-        return Ok((Some(k), Some(c), vec![]));
+fn decrypt_and_sign(
+    zip_path: &Path,
+    enc_key_path: &Path,
+    cert_path: &Path,
+    password: &str,
+) -> Result<()> {
+    println!(":: Decrypting private key...");
+    let temp_key = NamedTempFile::new()?;
+    let temp_key_path = temp_key.path();
+    let status = Command::new("openssl")
+        .args(["aes-256-cbc", "-d", "-pbkdf2", "-in"])
+        .arg(enc_key_path)
+        .arg("-out")
+        .arg(temp_key_path)
+        .arg("-pass")
+        .arg("env:OPENSSL_PASS_VAR")
+        .env("OPENSSL_PASS_VAR", password)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+        .context("Failed to execute openssl for decryption")?;
+
+    if !status.success() {
+        anyhow::bail!("Failed to decrypt private key. Check password and openssl version.");
     }
-    if let (Ok(k_env), Ok(c_env)) = (
-        env::var("META_HYBRID_SIGN_KEY"),
-        env::var("META_HYBRID_SIGN_CERT"),
-    ) {
-        // --- 关键修改：Base64 解码逻辑 ---
-        let k_clean = k_env.replace(['\n', '\r', ' '], "");
-        let c_clean = c_env.replace(['\n', '\r', ' '], "");
 
-        let k_bytes = general_purpose::STANDARD.decode(k_clean)
-            .context("Failed to decode SIGN_KEY from Base64")?;
-        let c_bytes = general_purpose::STANDARD.decode(c_clean)
-            .context("Failed to decode SIGN_CERT from Base64")?;
-
-        let mut k_file = NamedTempFile::new()?;
-        k_file.write_all(&k_bytes)?;
-        let mut c_file = NamedTempFile::new()?;
-        c_file.write_all(&c_bytes)?;
-
-        let k_path = k_file.path().to_path_buf();
-        let c_path = c_file.path().to_path_buf();
-        return Ok((Some(k_path), Some(c_path), vec![k_file, c_file]));
-    }
-    Ok((None, None, vec![]))
-}
-
-fn sign_module(zip_path: &Path, key_path: &Path, cert_path: &Path) -> Result<()> {
+    println!(":: Signing module with ksusig...");
     let output_path = zip_path.with_file_name(format!(
         "{}-signed.zip",
         zip_path.file_stem().unwrap_or_default().to_string_lossy()
     ));
 
-    println!(":: Signing module with ksusig...");
     let status = Command::new("ksusig")
         .arg("sign")
         .arg("--key")
-        .arg(key_path)
+        .arg(temp_key_path)
         .arg("--cert")
         .arg(cert_path)
-        .arg(zip_path) 
+        .arg(zip_path)
         .arg(&output_path)
         .status()
         .context("Failed to execute ksusig")?;
 
     if !status.success() {
-        anyhow::bail!("ksusig signing failed");
+        anyhow::bail!("ksusig signing failed.");
     }
-
     fs::rename(&output_path, zip_path)?;
+    println!(":: Signed successfully!");
     Ok(())
 }
 
