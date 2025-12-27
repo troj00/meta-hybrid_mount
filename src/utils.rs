@@ -1,3 +1,6 @@
+// Copyright 2025 Meta-Hybrid Mount Authors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use std::ffi::CString;
 use std::fmt as std_fmt;
 use std::fs::{self, File, create_dir_all, remove_dir_all, remove_file, write};
@@ -132,28 +135,22 @@ pub fn check_zygisksu_enforce_status() -> bool {
 fn copy_extended_attributes(src: &Path, dst: &Path) -> Result<()> {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     {
-        match lgetxattr(src, SELINUX_XATTR) {
-            Ok(ctx) => {
-                let _ = lsetxattr(dst, SELINUX_XATTR, &ctx, XattrFlags::empty());
+        if let Ok(mut ctx) = lgetfilecon(src) {
+            if ctx.contains("u:object_r:rootfs:s0") {
+                ctx = DEFAULT_CONTEXT.to_string();
             }
-            Err(_) => {
-                let _ = lsetxattr(
-                    dst,
-                    SELINUX_XATTR,
-                    DEFAULT_CONTEXT.as_bytes(),
-                    XattrFlags::empty(),
-                );
-            }
+            let _ = lsetfilecon(dst, &ctx);
+        } else {
+            let _ = lsetfilecon(dst, DEFAULT_CONTEXT);
         }
-
         if let Ok(opaque) = lgetxattr(src, OVERLAY_OPAQUE_XATTR) {
             let _ = lsetxattr(dst, OVERLAY_OPAQUE_XATTR, &opaque, XattrFlags::empty());
         }
-
         if let Ok(xattrs) = llistxattr(src) {
             for xattr_name in xattrs {
                 let name_bytes = xattr_name.as_bytes();
                 let name_str = String::from_utf8_lossy(name_bytes);
+
                 #[allow(clippy::collapsible_if)]
                 if name_str.starts_with("trusted.overlay.") && name_str != OVERLAY_OPAQUE_XATTR {
                     if let Ok(val) = lgetxattr(src, &xattr_name) {
@@ -195,7 +192,9 @@ pub fn lgetfilecon<P: AsRef<Path>>(path: P) -> Result<String> {
             path.as_ref().display()
         )
     })?;
-    Ok(String::from_utf8_lossy(&con).to_string())
+    let con_str = String::from_utf8_lossy(&con).trim_matches('\0').to_string();
+
+    Ok(con_str)
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "android")))]
@@ -413,6 +412,7 @@ fn native_cp_r(src: &Path, dst: &Path, relative: &Path, repair: bool) -> Result<
         if let Ok(src_meta) = src.metadata() {
             let _ = fs::set_permissions(dst, src_meta.permissions());
         }
+
         if repair && relative.as_os_str().is_empty() {
             let _ = apply_system_context(dst, relative);
         } else if !repair {
