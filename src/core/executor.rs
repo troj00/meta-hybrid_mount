@@ -252,10 +252,10 @@ pub fn execute(plan: &MountPlan, config: &config::Config) -> Result<ExecutionRes
     }
 
     #[cfg(any(target_os = "linux", target_os = "android"))]
-    if !config.disable_umount {
-        if let Err(e) = crate::try_umount::commit() {
-            log::warn!("Final try_umount commit failed: {}", e);
-        }
+    if !config.disable_umount
+        && let Err(e) = crate::try_umount::commit()
+    {
+        log::warn!("Final try_umount commit failed: {}", e);
     }
 
     let mut result_overlay = final_overlay_ids.into_iter().collect::<Vec<_>>();

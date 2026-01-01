@@ -627,10 +627,8 @@ pub fn mount_partitions(
         }
 
         #[cfg(any(target_os = "linux", target_os = "android"))]
-        if !disable_umount {
-            if let Err(e) = crate::try_umount::commit() {
-                log::warn!("Failed to commit try_umount list: {}", e);
-            }
+        if !disable_umount && let Err(e) = crate::try_umount::commit() {
+            log::warn!("Failed to commit try_umount list: {}", e);
         }
 
         fs::remove_dir(tmp_dir).ok();

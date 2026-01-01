@@ -3,7 +3,7 @@
 
 use std::{
     ffi::CString,
-    fs::{self, read_dir},
+    fs::read_dir,
     os::fd::RawFd,
     path::Path,
     sync::{
