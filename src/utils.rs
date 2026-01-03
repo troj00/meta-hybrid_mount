@@ -577,7 +577,7 @@ pub fn is_erofs_supported() -> bool {
 }
 
 pub fn create_erofs_image(src_dir: &Path, image_path: &Path) -> Result<()> {
-    let mkfs_bin = Path::new("/data/adb/meta-hybrid/tools/mkfs.erofs");
+    let mkfs_bin = Path::new("/data/adb/metamodule/tools/mkfs.erofs");
     let cmd_name = if mkfs_bin.exists() {
         mkfs_bin.as_os_str()
     } else {
