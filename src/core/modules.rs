@@ -188,13 +188,13 @@ pub fn update_description(
     };
 
     let nuke_str = if nuke_active {
-        " | 肉垫: 开启 ✨"
+        " | Activated ✨"
     } else {
         ""
     };
 
     let desc_text = format!(
-        "description=😋 运行中喵～ ({}) {} | Overlay: {} | Magic: {}{}",
+        "description=✅ Running～ ({}) {} | Overlay: {} | Magic: {}{}",
         mode_str, status_emoji, overlay_count, magic_count, nuke_str
     );
 
