@@ -92,14 +92,6 @@ jobs:
         run: |
           cargo run -p xtask -- build --release
 
-      - name: Notify Telegram (Release)
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          chmod +x notify
-          ./notify "6" "丰收 (Harvest)"
-
       - name: Generate Changelog
         id: meta
         run: |
